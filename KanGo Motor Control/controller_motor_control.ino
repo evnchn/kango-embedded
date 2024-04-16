@@ -9,6 +9,9 @@ LiquidCrystal_I2C lcd(0x27, 20, 4);  // change this
 // New added
 uint8_t broadcastAddress[] = { 0xC8, 0xF0, 0x9E, 0xEB, 0xF9, 0xD4 };  //is equivalent to AB:CD:EF:01:23:45 #Address C8:F0:9E:EB:F9:D4
 
+// SPEED LIMIT
+int speed_limited = 75;
+
 // Joystick pins
 const int joystickPinX = 35;  // change this // Analog input pin for X-axis
 const int joystickPinY = 34;  // change this // Analog input pin for Y-axis
@@ -104,7 +107,6 @@ void printPercent(int percent) {
   lcd.print(percent);
 }
 
-
 void setup() {
   // Initialize serial communication
   Serial.begin(2000000);
@@ -195,27 +197,31 @@ void readJoystick() {
   // Apply dead zone
   if (abs(joystickX - joystickCenterX) < joystickThreshold) {
     joystickX = joystickCenterX;
+    myMessage.mappedX = 90;
+  } else {
+  myMessage.mappedX = (joystickX > joystickCenterX) ? map(joystickX, joystickCenterX+joystickThreshold, 4096, 90, 180-speed_limited) : map(joystickX, 0, joystickCenterX-joystickThreshold, 0+speed_limited, 90);  // change this
   }
   if (abs(joystickY - joystickCenterY) < joystickThreshold) {
     joystickY = joystickCenterY;
+    myMessage.mappedY = 90;
+  } else {
+  myMessage.mappedY = (joystickY > joystickCenterY) ? map(joystickY, joystickCenterY+joystickThreshold, 4096, 90, 180-speed_limited) : map(joystickY, 0, joystickCenterY-joystickThreshold, 0+speed_limited, 90);  // change this
   }
   
   // Map joystick values to a range of -100 to 100
-  myMessage.mappedX = (joystickX > joystickCenterX) ? map(joystickX, joystickCenterX, 4096, 90, 180) : map(joystickX, 0, joystickCenterX, 0, 90);  // change this
-  myMessage.mappedY = (joystickY > joystickCenterY) ? map(joystickY, joystickCenterY, 4096, 90, 180) : map(joystickY, 0, joystickCenterY, 0, 90);  // change this
 
   // Print the joystick values to LCD
   //clearline(0);
   lcd.setCursor(0, 1);
   lcd.print("X-axis:");
-  printPercent(myMessage.mappedX);
-  lcd.print("%   ");
+  printPercent(myMessage.mappedX-90);
+  lcd.print("%=d");
 
   //clearline(1);
   lcd.setCursor(0, 2);
   lcd.print("Y-axis:");
-  printPercent(myMessage.mappedY);
-  lcd.print("%");
+  printPercent(myMessage.mappedY-90);
+  lcd.print("d");
 
   // Print the joystick values to serial (optional)
   //Serial.print("X-axis: ");
@@ -292,13 +298,17 @@ void buttonDown() {
 void buttonLeft() {
   // Placeholder - Add your code here
   lcd.setCursor(0, 1);
-  lcd.print("Left button pressed");
+  speed_limited -= 5;
+  speed_limited = constrain(speed_limited, 0, 85);
+  lcd.print(speed_limited);
   Serial.println("Left");
 }
 
 void buttonRight() {
   // Placeholder - Add your code here
   lcd.setCursor(0, 1);
-  lcd.print("Right button pressed");
+  speed_limited += 5;
+  speed_limited = constrain(speed_limited, 0, 85);
+  lcd.print(speed_limited);
   Serial.println("Right");
 }
