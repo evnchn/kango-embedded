@@ -1,3 +1,4 @@
+
 #include <LiquidCrystal_I2C.h>  // change this
 #include <WiFi.h>
 #include <esp_now.h>
@@ -11,6 +12,9 @@ uint8_t broadcastAddress[] = { 0xC8, 0xF0, 0x9E, 0xEB, 0xF9, 0xD4 };  //is equiv
 
 // SPEED LIMIT
 int speed_limited = 75;
+
+// TURN LIMIT
+int turn_limited = 50;
 
 // Joystick pins
 const int joystickPinX = 35;  // change this // Analog input pin for X-axis
@@ -61,7 +65,7 @@ message myMessage;
 
 esp_now_peer_info_t peerInfo;
 
-void printHex(const uint8_t *data, int len) { // get the info bits
+void printHex(const uint8_t *data, int len) {  // get the info bits
   for (int i = 0; i < len; i++) {
     if (data[i] < 0x10) {
       Serial.print("0");
@@ -84,9 +88,9 @@ void clearline(int line) {
   lcd.print("                    ");
 }
 
-void printPercent(int percent) {
+void printPercent(int percent, int leadingSpacesTotal = 4, int constrain_val = 100) {
   // Ensure that percent is within the range of -100 to 100
-  percent = constrain(percent, -100, 100);
+  percent = constrain(percent, -constrain_val, constrain_val);
 
   // Determine the number of characters required to display the value of percent
   int numDigits = (percent >= 0) ? 1 : 2;
@@ -96,7 +100,7 @@ void printPercent(int percent) {
   }
 
   // Calculate the number of leading spaces required to align the printed value
-  int leadingSpaces = 4 - numDigits;
+  int leadingSpaces = leadingSpacesTotal - numDigits;
 
   // Print the leading spaces
   for (int i = 0; i < leadingSpaces; i++) {
@@ -105,6 +109,16 @@ void printPercent(int percent) {
 
   // Print the value of percent
   lcd.print(percent);
+}
+
+void printInfo() {
+  lcd.setCursor(0, 3);
+  lcd.print("Spd:");
+  printPercent(90 - speed_limited, 2);
+  lcd.print("/90 ");
+  lcd.print("Turn:");
+  printPercent(90 - turn_limited, 2);
+  lcd.print("/90");
 }
 
 void setup() {
@@ -116,6 +130,8 @@ void setup() {
   lcd.clear();
   lcd.backlight();  // Make sure backlight is on
   lcd.print("===Press: ModeChg===");
+  lcd.setCursor(0, 3);
+  printInfo();
 
   // Set toggle switch pin as input
   pinMode(toggleSwitchPin, INPUT_PULLUP);
@@ -158,7 +174,11 @@ void loop() {
     } else {
       lcd.clear();
       lcd.print("===Mode: 4Buttons===");
+      lcd.setCursor(0, 2);
+      lcd.print("Left/Right   Up/Down");
     }
+    lcd.setCursor(0, 3);
+    printInfo();
     // Reset direction variable
     myMessage.directionPressed = false;
   }
@@ -199,29 +219,29 @@ void readJoystick() {
     joystickX = joystickCenterX;
     myMessage.mappedX = 90;
   } else {
-  myMessage.mappedX = (joystickX > joystickCenterX) ? map(joystickX, joystickCenterX+joystickThreshold, 4096, 90, 180-speed_limited) : map(joystickX, 0, joystickCenterX-joystickThreshold, 0+speed_limited, 90);  // change this
+    myMessage.mappedX = (joystickX > joystickCenterX) ? map(joystickX, joystickCenterX + joystickThreshold, 4096, 90, 180 - speed_limited - ((90 - speed_limited) * turn_limited / 90)) : map(joystickX, 0, joystickCenterX - joystickThreshold, 0 + speed_limited + ((90 - speed_limited) * turn_limited / 90), 90);  // change this
   }
   if (abs(joystickY - joystickCenterY) < joystickThreshold) {
     joystickY = joystickCenterY;
     myMessage.mappedY = 90;
   } else {
-  myMessage.mappedY = (joystickY > joystickCenterY) ? map(joystickY, joystickCenterY+joystickThreshold, 4096, 90, 180-speed_limited) : map(joystickY, 0, joystickCenterY-joystickThreshold, 0+speed_limited, 90);  // change this
+    myMessage.mappedY = (joystickY > joystickCenterY) ? map(joystickY, joystickCenterY + joystickThreshold, 4096, 90, 180 - speed_limited) : map(joystickY, 0, joystickCenterY - joystickThreshold, 0 + speed_limited, 90);  // change this
   }
-  
+
   // Map joystick values to a range of -100 to 100
 
   // Print the joystick values to LCD
   //clearline(0);
   lcd.setCursor(0, 1);
   lcd.print("X-axis:");
-  printPercent(myMessage.mappedX-90);
-  lcd.print("%=d");
+  printPercent(myMessage.mappedX - 90, 3, 180);
+  lcd.print("deg");
 
   //clearline(1);
   lcd.setCursor(0, 2);
   lcd.print("Y-axis:");
-  printPercent(myMessage.mappedY-90);
-  lcd.print("d");
+  printPercent(myMessage.mappedY - 90, 3, 180);
+  lcd.print("deg");
 
   // Print the joystick values to serial (optional)
   //Serial.print("X-axis: ");
@@ -286,6 +306,10 @@ void buttonUp() {
   lcd.setCursor(0, 1);
   lcd.print("Up button pressed");
   Serial.println("Up");
+  turn_limited -= 10;
+  turn_limited = constrain(turn_limited, 10, 80);
+  lcd.setCursor(0, 3);
+  printInfo();
 }
 
 void buttonDown() {
@@ -293,22 +317,32 @@ void buttonDown() {
   lcd.setCursor(0, 1);
   lcd.print("Down button pressed");
   Serial.println("Down");
+  turn_limited += 10;
+  turn_limited = constrain(turn_limited, 10, 80);
+  lcd.setCursor(0, 3);
+  printInfo();
 }
+
+
 
 void buttonLeft() {
   // Placeholder - Add your code here
   lcd.setCursor(0, 1);
-  speed_limited -= 5;
-  speed_limited = constrain(speed_limited, 0, 85);
-  lcd.print(speed_limited);
-  Serial.println("Left");
+  lcd.print("Left button pressed");
+  Serial.println("Up");
+  speed_limited += 1;
+  speed_limited = constrain(speed_limited, 5, 85);
+  lcd.setCursor(0, 3);
+  printInfo();
 }
 
 void buttonRight() {
   // Placeholder - Add your code here
   lcd.setCursor(0, 1);
-  speed_limited += 5;
-  speed_limited = constrain(speed_limited, 0, 85);
-  lcd.print(speed_limited);
-  Serial.println("Right");
+  lcd.print("Right button pressed");
+  Serial.println("Up");
+  speed_limited -= 1;
+  speed_limited = constrain(speed_limited, 5, 85);
+  lcd.setCursor(0, 3);
+  printInfo();
 }
